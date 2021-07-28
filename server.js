@@ -26,9 +26,14 @@ const todoSchema = new mongoose.Schema({
 const Todo = mongoose.model('Todo', todoSchema)
 
 const server = http.createServer(async (req, res) => {
+  const { method } = req
+  console.log('METHOD: ', method)
+
   let urlRequest = url.parse(req.url, true)
   console.log(urlRequest)
-  // console.log(`method: ${method} url: ${url}`)
+
+  const { pathname, query } = urlRequest
+  console.log(query)
 
   res.setHeader('Content-Type', 'application/json')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -38,13 +43,67 @@ const server = http.createServer(async (req, res) => {
     'POST, GET, OPTIONS, DELETE, PATCH'
   )
 
-  if (req.method === 'GET' && urlRequest.pathname === '/todos') {
-    await Todo.find({}).then((result) => {
+  if (method === 'GET' && pathname === '/todos') {
+    let params = {}
+    let result = {
+      active: 0,
+      completed: 0,
+      list: []
+    }
+
+    if (query.filter === 'completed') {
+      params = { completed: true }
+    }
+    if (query.filter === 'active') {
+      params = { completed: false }
+    }
+
+    try {
+      await Todo.countDocuments({ completed: true }).then(
+        (countCompleted) => {
+          result.completed = countCompleted
+        }
+      )
+
+      await Todo.countDocuments({ completed: false }).then(
+        (countActive) => {
+          result.active = countActive
+        }
+      )
+
+      await Todo.find(params).then((todos) => {
+        result.list = todos
+      })
+    } catch (e) {
+      console.error(e)
+    } finally {
       res.end(JSON.stringify(result))
-    })
+    }
   }
 
-  if (method === 'POST' && url === '/addtodo') {
+  if (method === 'GET' && pathname === '/counters') {
+    let result = {}
+
+    try {
+      await Todo.countDocuments({ completed: true }).then(
+        (countCompleted) => {
+          result.completed = countCompleted
+        }
+      )
+
+      await Todo.countDocuments({ completed: false }).then(
+        (countActive) => {
+          result.active = countActive
+        }
+      )
+    } catch (e) {
+      console.error(e)
+    } finally {
+      res.end(JSON.stringify(result))
+    }
+  }
+
+  if (method === 'POST' && pathname === '/addtodo') {
     req.on('data', async (chunk) => {
       const data = JSON.parse(chunk)
       const newTodo = new Todo(data)
@@ -59,7 +118,7 @@ const server = http.createServer(async (req, res) => {
     })
   }
 
-  if (method === 'DELETE' && url === '/delete') {
+  if (method === 'DELETE' && pathname === '/delete') {
     req.on('data', async (chunk) => {
       const keys = JSON.parse(chunk)
       console.log(keys)
@@ -69,7 +128,7 @@ const server = http.createServer(async (req, res) => {
     })
   }
 
-  if (method === 'PATCH' && url === '/changestatuses') {
+  if (method === 'PATCH' && pathname === '/changestatuses') {
     req.on('data', async (chunk) => {
       const data = JSON.parse(chunk)
       console.log(data)
@@ -80,7 +139,7 @@ const server = http.createServer(async (req, res) => {
     })
   }
 
-  if (method === 'PATCH' && url === '/edit') {
+  if (method === 'PATCH' && pathname === '/edit') {
     req.on('data', async (chunk) => {
       const data = JSON.parse(chunk)
       console.log(data)
@@ -94,7 +153,7 @@ const server = http.createServer(async (req, res) => {
     })
   }
 
-  if (method === 'DELETE' && url === '/clearcompleted') {
+  if (method === 'DELETE' && pathname === '/clearcompleted') {
     await Todo.deleteMany({ completed: true })
     await Todo.find({}).then((result) => {
       res.end(JSON.stringify(result))
